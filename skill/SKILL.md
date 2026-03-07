@@ -11,36 +11,39 @@ Use the host-local `todoist-cli` command.
 ## Workflow
 
 ```bash
-./scripts/todoist --help
-./scripts/todoist <command> --help
+todoist-cli --help
+todoist-cli <command> --help
 ```
 
-- Start with `./scripts/todoist --help` for the command groups.
-- Then use `./scripts/todoist <command> --help` for exact flags and examples.
+- Start with `todoist-cli --help` for the command groups.
+- Then use `todoist-cli <command> --help` for exact flags and examples.
 - Prefer read commands first, then perform writes after identifying the exact task or project reference.
+- Install or refresh the host CLI with `./install.sh --yes` when the local package has changed.
 
 ## Common commands
 
 ```bash
-./scripts/todoist whoami
-./scripts/todoist list --project inbox
-./scripts/todoist list --label cli-test
-./scripts/todoist list --today
-./scripts/todoist projects
-./scripts/todoist sections --project inbox
-./scripts/todoist find "search text"
-./scripts/todoist show "Task title"
-./scripts/todoist today
-./scripts/todoist comment "Task title"
-./scripts/todoist activity --project inbox
-./scripts/todoist doctor
-./scripts/todoist add "Task title" "tomorrow 9am"
-./scripts/todoist quick "Task title #Inbox tomorrow 9am"
-./scripts/todoist modify "Task title" --priority p1
-./scripts/todoist move "Task title" --project inbox
-./scripts/todoist done "Task title"
-./scripts/todoist reopen id:123abc
-./scripts/todoist delete "Task title"
+todoist-cli whoami
+todoist-cli whoami --markdown
+todoist-cli overview --markdown
+todoist-cli list --project inbox
+todoist-cli list --label cli-test
+todoist-cli list --today
+todoist-cli projects
+todoist-cli sections --project inbox
+todoist-cli find "search text"
+todoist-cli show "Task title"
+todoist-cli today
+todoist-cli comment "Task title"
+todoist-cli activity --project inbox
+todoist-cli doctor --markdown
+todoist-cli add "Task title" "tomorrow 9am"
+todoist-cli quick "Task title #Inbox tomorrow 9am"
+todoist-cli modify "Task title" --priority p1
+todoist-cli move "Task title" --project inbox
+todoist-cli done "Task title"
+todoist-cli reopen id:123abc
+todoist-cli delete "Task title"
 ```
 
 ## Notes
@@ -49,5 +52,5 @@ Use the host-local `todoist-cli` command.
 - Refs accept names, `id:...`, raw IDs, and Todoist URLs where applicable.
 - `list` is the explicit filter surface. Use `--project`, `--label`, `--today`, and `--overdue` there.
 - `find` is text-only local matching over active tasks.
-- `--compact` and `--markdown` are available on supported read commands.
+- `whoami`, `overview`, `list`, `show`, `comment`, `activity`, and `doctor` support `--markdown` and `--compact`.
 - For state-changing actions, resolve the exact task/project first with `list`, `find`, `show`, `projects`, or `sections`.

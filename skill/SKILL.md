@@ -1,7 +1,7 @@
 ---
 name: todoist-cli
 description: |
-  Use the local todoist-cli command to read and update Todoist tasks and projects on this host. Use when listing tasks, filtering by project or label, checking today's tasks, finding tasks by text, adding tasks, modifying tasks, moving tasks, completing tasks, reopening tasks, commenting, checking activity, or deleting tasks.
+  Use the local todoist-cli command to read and update Todoist tasks and projects. Use when listing tasks, filtering by project or label, checking today's tasks, finding tasks by text, adding tasks, modifying tasks, moving tasks, completing tasks, reopening tasks, commenting, checking activity, or deleting tasks.
 ---
 
 # Todoist CLI

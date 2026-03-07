@@ -8,7 +8,7 @@ This repo is intentionally lighter than the official CLI and lighter than an MCP
 
 - official Doist package first
 - API/tool usage instead of mandatory MCP wiring
-- easy to adapt later for OpenClaw skills or local scripts
+- easy to adapt later for skills or local scripts
 
 ## Setup
 
@@ -31,7 +31,7 @@ Then set your Todoist token in `~/.config/todoist-cli/config.json`:
 
 You can still use `TODOIST_API_KEY` or `TODOIST_API_TOKEN` as an override.
 
-## OpenClaw Skill Install
+## Skill Install
 
 Install the bundled skill into the default OpenClaw workspaces on this host:
 

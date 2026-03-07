@@ -97,8 +97,8 @@ fi
 
 for target in "${TARGETS[@]}"; do
   mkdir -p "$target"
-  rm -rf "$target/$SKILL_NAME"
-  cp -R "$SKILL_SOURCE" "$target/$SKILL_NAME"
+  mkdir -p "$target/$SKILL_NAME"
+  cp -R "$SKILL_SOURCE"/. "$target/$SKILL_NAME"
   chmod +x "$target/$SKILL_NAME/scripts/todoist"
   echo "Installed skill to $(display_path "$target")/$SKILL_NAME"
 done

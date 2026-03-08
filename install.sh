@@ -65,7 +65,7 @@ if [[ "$INSTALL_GLOBAL" =~ ^[Yy]$ ]]; then
   npm install -g "./$PACKAGE_TARBALL"
   rm -f "./$PACKAGE_TARBALL"
 else
-  echo "Skipped global install. Run 'npm install -g .' later if needed."
+  echo "Skipped global install. Run './install.sh --yes' later if needed."
 fi
 
 echo "Ensuring config directory exists..."

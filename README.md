@@ -1,14 +1,14 @@
 # todoist-cli
 
-CLI-first Todoist wrapper built on the official [`@doist/todoist-ai`](https://github.com/Doist/todoist-ai) package.
+CLI-first Todoist wrapper built directly on [`@doist/todoist-api-typescript`](https://github.com/Doist/todoist-api-typescript).
 
-This repo is intentionally lighter than the official CLI and lighter than an MCP-first integration. It keeps a small AI-friendly command surface for common Todoist operations.
+This repo is intentionally lighter than an MCP-first integration. It keeps a small AI-friendly command surface for common Todoist operations.
 
 ## Why this repo
 
-- official Doist package first
-- API/tool usage instead of mandatory MCP wiring
-- easy to adapt later for skills or local scripts
+- single dependency, no AI layer required
+- direct REST API usage, easy to audit and adapt
+- easy to wire as a local script or OpenClaw skill
 
 ## Setup
 
@@ -74,8 +74,6 @@ todoist-cli reopen id:123abc
 todoist-cli completed-list --days 7
 todoist-cli doctor
 todoist-cli delete "Buy milk"
-todoist-cli tools
-todoist-cli run find-projects '{"searchText":"CLI Test","limit":5}'
 todoist-cli --config /path/to/config.json whoami
 ```
 
@@ -89,9 +87,5 @@ todoist-cli --config /path/to/config.json whoami
 - `done --forever` permanently completes a recurring task.
 - `--compact` prints lightweight plain text on supported read commands.
 - `--markdown` prints Markdown tables on supported read commands.
-- Local/global npm installs should use the scoped package name `@efficiency/todoist-cli`.
-- This repo uses the official Doist tool packages directly.
-- MCP is optional and not required for this workflow.
-- The `run` command is the escape hatch for any supported tool name wired in `bin/todoist-cli.js`.
 - `delete` intentionally stays simple for AI-oriented workflows; no confirmation prompt for now.
 - `install.sh` installs dependencies, optionally installs the CLI globally, and sets up config; `install-skill.sh` copies the bundled OpenClaw skill.

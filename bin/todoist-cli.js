@@ -5,23 +5,6 @@ import os from "node:os";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
 import { createCommand, TodoistApi } from "@doist/todoist-api-typescript";
-import {
-  addTasks,
-  completeTasks,
-  findProjects,
-  findTasksByDate,
-  getOverview,
-  userInfo,
-} from "@doist/todoist-ai";
-
-const TOOL_MAP = {
-  "add-tasks": addTasks,
-  "complete-tasks": completeTasks,
-  "find-projects": findProjects,
-  "find-tasks-by-date": findTasksByDate,
-  "get-overview": getOverview,
-  "user-info": userInfo,
-};
 
 const DEFAULT_CONFIG_PATH = path.join(
   process.env.XDG_CONFIG_HOME || path.join(os.homedir(), ".config"),
@@ -70,8 +53,6 @@ Write:
 
 Advanced:
   doctor
-  tools
-  run
 
 Global options:
   --config <path>    Override config path
@@ -316,7 +297,7 @@ Options:
 `,
   today: `todoist-cli today
 
-List today's tasks using the official Doist helper.
+List today's tasks.
 
 Usage:
   todoist-cli today
@@ -351,28 +332,10 @@ Usage:
 `,
   overview: `todoist-cli overview
 
-Show the Doist overview summary.
+Show account overview (projects, sections, inbox).
 
 Usage:
   todoist-cli overview
-`,
-  run: `todoist-cli run
-
-Call one supported official Doist AI tool directly.
-
-Usage:
-  todoist-cli tools
-  todoist-cli run find-tasks-by-date '{"startDate":"today","daysCount":1}'
-
-Notes:
-  - This follows official tool semantics, not the simplified CLI semantics
-`,
-  tools: `todoist-cli tools
-
-List the directly wired official Doist AI tool names.
-
-Usage:
-  todoist-cli tools
 `,
 };
 
@@ -385,6 +348,15 @@ Global options:
 
 for (const [key, text] of Object.entries(HELP_BY_COMMAND)) {
   HELP_BY_COMMAND[key] = `${text.trimEnd()}\n${HELP_GLOBAL_OPTIONS}`;
+}
+
+function mapPremiumStatus(status) {
+  switch (status) {
+    case "current_personal_plan": return "Todoist Pro";
+    case "legacy_personal_plan": return "Todoist Pro (Legacy)";
+    case "teams_business_member": return "Todoist Business";
+    default: return "Todoist Free";
+  }
 }
 
 function exitWithError(message) {
@@ -1109,7 +1081,7 @@ async function runDoctor(options) {
   const configPath = resolveConfigPath(options);
   const configExists = fs.existsSync(configPath);
   const { token, source, config } = resolveTokenInfo(configPath);
-  const dependencies = ["@doist/todoist-ai", "@doist/todoist-api-typescript"].map((packageName) => {
+  const dependencies = ["@doist/todoist-api-typescript"].map((packageName) => {
     const declared = JSON.parse(fs.readFileSync(path.join(process.cwd(), "package.json"), "utf8")).dependencies?.[packageName];
     const installed = readInstalledPackageVersion(packageName);
     const latest = readLatestPackageVersion(packageName);
@@ -1146,12 +1118,12 @@ async function runDoctor(options) {
 
   if (token) {
     try {
-      const info = await userInfo.execute({}, new TodoistApi(token));
+      const user = await new TodoistApi(token).getUser();
       result.api = {
         checked: true,
         ok: true,
-        user: info?.structuredContent?.fullName || null,
-        plan: info?.structuredContent?.plan || null,
+        user: user.fullName || null,
+        plan: mapPremiumStatus(user.premiumStatus),
       };
     } catch (error) {
       result.api = {
@@ -1295,14 +1267,24 @@ async function listTasks(client, options, projectSelector) {
   };
 }
 
-async function runTool(toolName, rawArgs, options) {
-  const tool = TOOL_MAP[toolName];
-  if (!tool) {
-    exitWithError(`Unknown tool: ${toolName}`);
-  }
-  const args = parseJsonArg(rawArgs);
-  const result = await tool.execute(args, getClient(options));
-  printResult(result?.structuredContent ? result.structuredContent : result, options);
+async function closeTaskIds(client, ids) {
+  const results = await Promise.allSettled(ids.map((id) => client.closeTask(id)));
+  const completed = [];
+  const failures = [];
+  results.forEach((r, i) => {
+    if (r.status === "fulfilled") {
+      completed.push(ids[i]);
+    } else {
+      failures.push({ item: ids[i], error: r.reason instanceof Error ? r.reason.message : String(r.reason) });
+    }
+  });
+  return {
+    completed,
+    failures,
+    successCount: completed.length,
+    failureCount: failures.length,
+    totalRequested: ids.length,
+  };
 }
 
 async function runFind(rest, options) {
@@ -1772,27 +1754,83 @@ async function main() {
       console.log(pkgVersion);
       return;
     }
-    case "tools":
-      if (wantsCommandHelp(rest, options)) {
-        printHelp("tools");
-        return;
-      }
-      console.log(Object.keys(TOOL_MAP).sort().join("\n"));
-      return;
     case "whoami":
       if (wantsCommandHelp(rest, options)) {
         printHelp("whoami");
         return;
       }
-      await runTool("user-info", "{}", options);
+      {
+        const client = getClient(options);
+        const user = await client.getUser();
+        const tz = user.tzInfo?.timezone ?? "UTC";
+        const now = new Date(new Date().toLocaleString("en-US", { timeZone: tz }));
+        const dayOfWeek = now.getDay();
+        const startDay = user.startDay ?? 1;
+        const daysBack = (dayOfWeek - startDay + 7) % 7;
+        const weekStart = new Date(now);
+        weekStart.setDate(now.getDate() - daysBack);
+        const weekEnd = new Date(weekStart);
+        weekEnd.setDate(weekStart.getDate() + 6);
+        const fmt = (d) => d.toISOString().slice(0, 10);
+        const result = {
+          type: "user_info",
+          fullName: user.fullName,
+          email: user.email,
+          plan: mapPremiumStatus(user.premiumStatus),
+          timezone: tz,
+          weekStartDate: fmt(weekStart),
+          weekEndDate: fmt(weekEnd),
+          completedToday: user.completedToday,
+          dailyGoal: user.dailyGoal,
+          weeklyGoal: user.weeklyGoal,
+        };
+        printResult(result, options);
+      }
       return;
-    case "overview":
+    case "overview": {
       if (wantsCommandHelp(rest, options)) {
         printHelp("overview");
         return;
       }
-      await runTool("get-overview", "{}", options);
+      {
+        const client = getClient(options);
+        const [allProjectsResp, allSectionsResp] = await Promise.all([
+          client.getProjects({ limit: 200 }),
+          client.getSections({ limit: 200 }),
+        ]);
+        const projects = allProjectsResp.results ?? allProjectsResp;
+        const sections = allSectionsResp.results ?? allSectionsResp;
+        const sectionsByProjectId = {};
+        for (const section of sections) {
+          if (!sectionsByProjectId[section.projectId]) sectionsByProjectId[section.projectId] = [];
+          sectionsByProjectId[section.projectId].push({ id: section.id, name: section.name });
+        }
+        const childrenByParentId = {};
+        for (const project of projects) {
+          if (project.parentId) {
+            if (!childrenByParentId[project.parentId]) childrenByParentId[project.parentId] = [];
+            childrenByParentId[project.parentId].push(project);
+          }
+        }
+        const inboxProject = projects.find((p) => p.isInboxProject) ?? projects[0] ?? null;
+        const result = {
+          type: "account_overview",
+          inbox: inboxProject ? { id: inboxProject.id, name: inboxProject.name } : null,
+          totalProjects: projects.length,
+          totalSections: sections.length,
+          hasNestedProjects: projects.some((p) => p.parentId != null),
+          projects: projects.map((p) => ({
+            id: p.id,
+            name: p.name,
+            parentId: p.parentId ?? null,
+            sections: sectionsByProjectId[p.id] ?? [],
+            children: childrenByParentId[p.id] ?? [],
+          })),
+        };
+        printResult(result, options);
+      }
       return;
+    }
     case "list":
       if (wantsCommandHelp(rest, options)) {
         printHelp("list");
@@ -1805,11 +1843,20 @@ async function main() {
         printHelp("projects");
         return;
       }
-      const searchText = rest.join(" ").trim();
-      const payload =
-        searchText.length > 0 ? { searchText, limit: Number(options.limit ?? 20) } : { limit: Number(options.limit ?? 20) };
-      const result = await findProjects.execute(payload, getClient(options));
-      printResult(result?.structuredContent ? result.structuredContent : result, options);
+      {
+        const client = getClient(options);
+        const searchText = rest.join(" ").trim();
+        const limit = Number(options.limit ?? 20);
+        let projects;
+        if (searchText.length > 0) {
+          const response = await client.searchProjects({ query: searchText, limit });
+          projects = response.results ?? response;
+        } else {
+          const response = await client.getProjects({ limit });
+          projects = response.results ?? response;
+        }
+        printResult({ projects }, options);
+      }
       return;
     }
     case "labels":
@@ -1867,13 +1914,38 @@ async function main() {
         printHelp("today");
         return;
       }
-      const payload = {
-        startDate: options.start ?? "today",
-        daysCount: Number(options.days ?? 1),
-        limit: Number(options.limit ?? 50),
-        overdueOption: options.overdue ?? "include-overdue",
-      };
-      await runTool("find-tasks-by-date", JSON.stringify(payload), options);
+      {
+        const client = getClient(options);
+        const daysCount = Number(options.days ?? 1);
+        const overdueOption = options.overdue ?? "include-overdue";
+        const limit = Number(options.limit ?? 50);
+        let query;
+        if (overdueOption === "overdue-only") {
+          query = "overdue";
+        } else if (daysCount > 1) {
+          const base = `due before: +${daysCount + 1}d`;
+          query = overdueOption === "exclude-overdue" ? base : `(${base}) | overdue`;
+        } else {
+          query = overdueOption === "exclude-overdue" ? "today" : "today | overdue";
+        }
+        const response = await client.getTasksByFilter({ query, limit });
+        const rawTasks = response.results ?? response;
+        const projectsResp = await client.getProjects({ limit: 200 });
+        const projectList = projectsResp.results ?? projectsResp;
+        const projectMap = Object.fromEntries(projectList.map((p) => [p.id, p.name]));
+        const tasks = rawTasks.map((task) => ({
+          id: task.id,
+          content: task.content,
+          description: task.description ?? "",
+          projectName: projectMap[task.projectId] ?? "",
+          dueDate: task.due?.date ?? null,
+          recurring: task.due?.isRecurring ?? false,
+          priority: task.priority,
+          labels: task.labels ?? [],
+          url: task.url ?? "",
+        }));
+        printResult({ tasks }, options);
+      }
       return;
     }
     case "add": {
@@ -1994,16 +2066,16 @@ async function main() {
           );
           return;
         }
-        const result = await completeTasks.execute({ ids: [task.id] }, client);
-        printResult(result?.structuredContent ? result.structuredContent : result, options);
+        const result = await closeTaskIds(client, [task.id]);
+        printResult(result, options);
         return;
       }
       const ids = await resolveTaskIds(client, rest);
-      const result = await completeTasks.execute({ ids }, client);
-      printResult(result?.structuredContent ? result.structuredContent : result, options);
+      const result = await closeTaskIds(client, ids);
+      printResult(result, options);
       return;
     }
-    case "close":
+    case "close": {
       if (wantsCommandHelp(rest, options)) {
         printHelp("close");
         return;
@@ -2013,9 +2085,10 @@ async function main() {
       }
       const client = getClient(options);
       const ids = await resolveTaskIds(client, rest);
-      const result = await completeTasks.execute({ ids }, client);
-      printResult(result?.structuredContent ? result.structuredContent : result, options);
+      const result = await closeTaskIds(client, ids);
+      printResult(result, options);
       return;
+    }
     case "reopen":
       if (wantsCommandHelp(rest, options)) {
         printHelp("reopen");
@@ -2037,18 +2110,6 @@ async function main() {
       }
       await runDelete(rest, options);
       return;
-    case "run": {
-      if (wantsCommandHelp(rest, options)) {
-        printHelp("run");
-        return;
-      }
-      const toolName = rest[0];
-      if (!toolName) {
-        exitWithError("Usage: todoist-cli run <tool-name> '<json-args>'");
-      }
-      await runTool(toolName, rest[1] ?? "{}", options);
-      return;
-    }
     default:
       exitWithError(`Unknown command: ${command}\n\n${HELP_TEXT}`);
   }

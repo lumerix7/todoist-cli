@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "license": "MIT",
-  "description": "CLI-first Todoist wrapper built on the official @doist/todoist-ai tools",
+  "description": "CLI-first Todoist wrapper built on @doist/todoist-api-typescript",
   "bin": {
     "todoist-cli": "./bin/todoist-cli.js"
   },
@@ -13,7 +13,6 @@
     "check": "node ./bin/todoist-cli.js --help"
   },
   "dependencies": {
-    "@doist/todoist-ai": "^7.13.0",
     "@doist/todoist-api-typescript": "^7.1.1"
   }
 }

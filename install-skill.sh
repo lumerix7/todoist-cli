@@ -42,11 +42,17 @@ Arguments:
 Notes:
   - If no targets are passed, the script tries to discover OpenClaw workspace skill directories.
   - Automatic discovery uses openclaw + jq when available.
+  - todoist-cli must already be installed (run ./install.sh first).
 USAGE
 }
 
 if [[ ! -d "$SKILL_SOURCE" ]]; then
   echo "Missing skill source directory: $SKILL_SOURCE" >&2
+  exit 1
+fi
+
+if ! command -v todoist-cli >/dev/null 2>&1; then
+  echo "todoist-cli is not installed. Run ./install.sh first." >&2
   exit 1
 fi
 
@@ -99,6 +105,6 @@ for target in "${TARGETS[@]}"; do
   mkdir -p "$target"
   mkdir -p "$target/$SKILL_NAME"
   cp -R "$SKILL_SOURCE"/. "$target/$SKILL_NAME"
-  chmod +x "$target/$SKILL_NAME/scripts/todoist"
+  find "$target/$SKILL_NAME/scripts" -type f -exec chmod +x {} \;
   echo "Installed skill to $(display_path "$target")/$SKILL_NAME"
 done

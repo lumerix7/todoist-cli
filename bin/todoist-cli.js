@@ -1750,6 +1750,12 @@ async function main() {
   const { positionals, options } = parseArgs(process.argv.slice(2));
   const [command, ...rest] = positionals;
 
+  if (options.version) {
+    const pkgVersion = JSON.parse(fs.readFileSync(new URL("../package.json", import.meta.url), "utf8")).version;
+    console.log(pkgVersion);
+    return;
+  }
+
   if (options.compact && options.markdown) {
     exitWithError("Choose one output mode: --compact or --markdown.");
   }
@@ -1761,6 +1767,11 @@ async function main() {
     case "-h":
       printHelp(rest[0]);
       return;
+    case "-v": {
+      const pkgVersion = JSON.parse(fs.readFileSync(new URL("../package.json", import.meta.url), "utf8")).version;
+      console.log(pkgVersion);
+      return;
+    }
     case "tools":
       if (wantsCommandHelp(rest, options)) {
         printHelp("tools");

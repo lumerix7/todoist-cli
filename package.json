@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "license": "MIT",
   "description": "CLI-first Todoist wrapper built on the official @doist/todoist-ai tools",
   "bin": {
     "todoist-cli": "./bin/todoist-cli.js"

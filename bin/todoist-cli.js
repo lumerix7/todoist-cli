@@ -23,8 +23,7 @@ Setup:
 
 Usage:
   todoist-cli <command> [options]
-  todoist-cli help [command]
-  todoist-cli <command> -h
+  todoist-cli <command> -h|--help
 
 Read:
   whoami
@@ -68,7 +67,7 @@ Common examples:
   todoist-cli move 123abc --project inbox
 
 Details:
-  todoist-cli help list
+  todoist-cli list --help
   todoist-cli modify --help
 `;
 
@@ -1747,10 +1746,9 @@ async function main() {
 
   switch (command) {
     case undefined:
-    case "help":
     case "--help":
     case "-h":
-      printHelp(rest[0]);
+      printHelp();
       return;
     case "-v": {
       const pkgVersion = JSON.parse(fs.readFileSync(new URL("../package.json", import.meta.url), "utf8")).version;

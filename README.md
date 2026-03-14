@@ -52,7 +52,7 @@ Or install into specific skill directories:
 ## Quick start
 
 ```bash
-todoist-cli help
+todoist-cli --help
 todoist-cli whoami
 todoist-cli list
 todoist-cli list --project inbox
@@ -79,7 +79,7 @@ todoist-cli --config /path/to/config.json whoami
 
 ## Notes
 
-- Prefer `todoist-cli help <command>` for exact flags.
+- Use `todoist-cli <command> --help` for exact flags.
 - Task/project/section refs accept names, `id:...`, raw IDs, and Todoist URLs where applicable.
 - `list` is the explicit filter surface. Use `--project`, `--label`, `--today`, and `--overdue` there.
 - `find` is text-only local matching over active tasks.

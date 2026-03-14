@@ -1058,7 +1058,8 @@ async function loadProjects(client) {
 
 function readInstalledPackageVersion(packageName) {
   try {
-    const packagePath = path.join(process.cwd(), "node_modules", ...packageName.split("/"), "package.json");
+    const scriptDir = path.dirname(new URL(import.meta.url).pathname);
+    const packagePath = path.join(scriptDir, "..", "node_modules", ...packageName.split("/"), "package.json");
     return JSON.parse(fs.readFileSync(packagePath, "utf8")).version || null;
   } catch {
     return null;
@@ -1081,8 +1082,10 @@ async function runDoctor(options) {
   const configPath = resolveConfigPath(options);
   const configExists = fs.existsSync(configPath);
   const { token, source, config } = resolveTokenInfo(configPath);
+  const scriptDir = path.dirname(new URL(import.meta.url).pathname);
+  const ownPkg = JSON.parse(fs.readFileSync(path.join(scriptDir, "..", "package.json"), "utf8"));
   const dependencies = ["@doist/todoist-api-typescript"].map((packageName) => {
-    const declared = JSON.parse(fs.readFileSync(path.join(process.cwd(), "package.json"), "utf8")).dependencies?.[packageName];
+    const declared = ownPkg.dependencies?.[packageName];
     const installed = readInstalledPackageVersion(packageName);
     const latest = readLatestPackageVersion(packageName);
     return {
@@ -1096,8 +1099,8 @@ async function runDoctor(options) {
 
   const result = {
     cli: {
-      packageName: JSON.parse(fs.readFileSync(path.join(process.cwd(), "package.json"), "utf8")).name,
-      version: JSON.parse(fs.readFileSync(path.join(process.cwd(), "package.json"), "utf8")).version,
+      packageName: ownPkg.name,
+      version: ownPkg.version,
     },
     config: {
       path: configPath,

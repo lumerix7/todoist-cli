@@ -11,6 +11,10 @@ const DEFAULT_CONFIG_PATH = path.join(
   "todoist-cli",
   "config.json",
 );
+const RETRYABLE_HTTP_STATUS_CODES = new Set([408, 429, 500, 502, 503, 504]);
+const IDEMPOTENT_RETRY_METHODS = new Set(["GET"]);
+const MAX_API_RETRY_ATTEMPTS = 3;
+const BASE_API_RETRY_DELAY_MS = 500;
 
 const HELP_TEXT = `todoist-cli
 
@@ -519,7 +523,78 @@ function getClient(options) {
       `Missing Todoist token. Set TODOIST_API_KEY/TODOIST_API_TOKEN or write {"token":"..."} to ${configPath}.`,
     );
   }
-  return new TodoistApi(token);
+  return createTodoistClient(token);
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function parseRetryAfterMs(headers) {
+  const retryAfterHeader =
+    typeof headers?.get === "function"
+      ? headers.get("retry-after")
+      : headers?.["retry-after"] || headers?.["Retry-After"];
+  if (!retryAfterHeader) {
+    return null;
+  }
+  const numericSeconds = Number(retryAfterHeader);
+  if (Number.isFinite(numericSeconds) && numericSeconds >= 0) {
+    return numericSeconds * 1000;
+  }
+  const retryAt = Date.parse(retryAfterHeader);
+  if (Number.isFinite(retryAt)) {
+    return Math.max(0, retryAt - Date.now());
+  }
+  return null;
+}
+
+function shouldRetryHttpResponse(method, status) {
+  if (!RETRYABLE_HTTP_STATUS_CODES.has(status)) {
+    return false;
+  }
+  if (status === 429) {
+    return true;
+  }
+  return IDEMPOTENT_RETRY_METHODS.has(method);
+}
+
+function getRetryDelayMs(responseHeaders, attempt) {
+  const retryAfterMs = parseRetryAfterMs(responseHeaders);
+  if (retryAfterMs !== null) {
+    return retryAfterMs;
+  }
+  return BASE_API_RETRY_DELAY_MS * (2 ** (attempt - 1));
+}
+
+function toCustomFetchResponse(response) {
+  return {
+    ok: response.ok,
+    status: response.status,
+    statusText: response.statusText,
+    headers: Object.fromEntries(response.headers.entries()),
+    text: () => response.text(),
+    json: () => response.json(),
+  };
+}
+
+async function todoistRetryingFetch(url, options = {}) {
+  const { timeout: _timeout, ...fetchOptions } = options;
+  const method = String(fetchOptions.method || "GET").toUpperCase();
+  for (let attempt = 1; attempt <= MAX_API_RETRY_ATTEMPTS; attempt += 1) {
+    const response = await fetch(url, fetchOptions);
+    if (!shouldRetryHttpResponse(method, response.status) || attempt === MAX_API_RETRY_ATTEMPTS) {
+      return toCustomFetchResponse(response);
+    }
+    await sleep(getRetryDelayMs(response.headers, attempt));
+  }
+  return toCustomFetchResponse(await fetch(url, fetchOptions));
+}
+
+function createTodoistClient(token) {
+  return new TodoistApi(token, {
+    customFetch: todoistRetryingFetch,
+  });
 }
 
 function parseJsonArg(raw) {
@@ -1120,7 +1195,7 @@ async function runDoctor(options) {
 
   if (token) {
     try {
-      const user = await new TodoistApi(token).getUser();
+      const user = await createTodoistClient(token).getUser();
       result.api = {
         checked: true,
         ok: true,
@@ -1746,9 +1821,10 @@ async function main() {
 
   switch (command) {
     case undefined:
+    case "help":
     case "--help":
     case "-h":
-      printHelp();
+      printHelp(rest[0]);
       return;
     case "-v": {
       const pkgVersion = JSON.parse(fs.readFileSync(new URL("../package.json", import.meta.url), "utf8")).version;

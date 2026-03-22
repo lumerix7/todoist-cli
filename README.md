@@ -87,5 +87,7 @@ todoist-cli --config /path/to/config.json whoami
 - `done --forever` permanently completes a recurring task.
 - `--compact` prints lightweight plain text on supported read commands.
 - `--markdown` prints Markdown tables on supported read commands.
+- The CLI adds lightweight retry/backoff on top of the Todoist SDK: `429` is retried for all methods, and transient `GET` failures (`408`, `500`, `502`, `503`, `504`) are retried with backoff.
 - `delete` intentionally stays simple for AI-oriented workflows; no confirmation prompt for now.
 - `install.sh` installs dependencies, optionally installs the CLI globally, and sets up config; `install-skill.sh` copies the bundled OpenClaw skill.
+- See [`TESTING.md`](./TESTING.md) for the current verification checklist and recent test notes.

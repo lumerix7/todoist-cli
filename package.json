@@ -13,6 +13,6 @@
     "check": "node ./bin/todoist-cli.js --help"
   },
   "dependencies": {
-    "@doist/todoist-api-typescript": "^7.6.0"
+    "@doist/todoist-api-typescript": "^7.7.0"
   }
 }

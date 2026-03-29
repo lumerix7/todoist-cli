@@ -482,6 +482,59 @@ function formatActivityEvent(event) {
   };
 }
 
+function formatCompletedTaskAsActivityEvent(task, projectNameById) {
+  return {
+    id: task.id,
+    objectType: "task",
+    objectId: task.id,
+    eventType: "completed",
+    eventDate: task.completedAt || task.updatedAt || task.addedAt || undefined,
+    parentProjectId: task.projectId || undefined,
+    parentItemId: task.parentId || undefined,
+    extraData: {
+      content: task.content,
+      projectName: projectNameById.get(task.projectId) || undefined,
+      dueDate: task.due?.date || undefined,
+      url: task.url || undefined,
+    },
+  };
+}
+
+function isCompletedTaskActivityRequest(options) {
+  const eventIsCompleted = options.event === "completed";
+  const objectIsTaskLike = options.object === undefined || options.object === "task";
+  return eventIsCompleted
+    && objectIsTaskLike
+    && typeof options.since === "string"
+    && typeof options.until === "string";
+}
+
+async function loadPrimaryCompletedTaskActivityEvents(client, options, parentProjectId, projectName) {
+  const limit = Number(options.limit ?? 20);
+  const response = await client.getCompletedTasksByCompletionDate({
+    since: options.since,
+    until: options.until,
+    ...(parentProjectId ? { projectId: parentProjectId } : {}),
+    limit,
+  });
+  const projects = await loadProjects(client);
+  const projectNameById = new Map(projects.map((project) => [project.id, project.name]));
+  const events = (response.items ?? []).map((task) => formatCompletedTaskAsActivityEvent(task, projectNameById));
+  return {
+    events,
+    totalCount: events.length,
+    hasMore: Boolean(response.nextCursor),
+    appliedFilters: {
+      ...(parentProjectId ? { projectId: parentProjectId, projectName } : {}),
+      objectEventTypes: options.object === "task" ? "task:completed" : ":completed",
+      since: options.since,
+      until: options.until,
+      limit,
+      source: "completed-tasks-by-completion-date",
+    },
+  };
+}
+
 function loadConfig(configPath) {
   if (!fs.existsSync(configPath)) {
     return {};
@@ -1535,6 +1588,14 @@ async function runActivity(options) {
   let objectEventTypes;
   if (options.object || options.event) {
     objectEventTypes = `${options.object ?? ""}:${options.event ?? ""}`;
+  }
+
+  if (isCompletedTaskActivityRequest(options)) {
+    // Completed task activity with an explicit date window is backed by Todoist's
+    // dedicated completed-tasks endpoint rather than the generic activities feed.
+    const result = await loadPrimaryCompletedTaskActivityEvents(client, options, parentProjectId, projectName);
+    printResult(result, options);
+    return;
   }
 
   const response = await client.getActivityLogs({

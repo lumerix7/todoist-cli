@@ -26,6 +26,8 @@ Notes:
 - On `2026-03-16`, reinstalled globally after all refactors; `whoami`, `overview`, `projects`, `today`, `doctor` (all three output modes), version flags, error cases reverified against global binary.
 - On `2026-03-25`, `@doist/todoist-api-typescript` was updated to `7.4.0` and repo-level retry/backoff was added on top of the SDK's network retry: `429` is retried for all methods, and transient `GET` failures (`408`, `500`, `502`, `503`, `504`) are retried with exponential backoff.
 - On `2026-03-25`, important read-path checks were reverified against `node ./bin/todoist-cli.js`: `help`, `whoami --markdown`, `overview --compact`, `projects "CLI Test"`, `sections --project "CLI Test"`, `list --project "CLI Test" --markdown`, `activity` reads, `doctor --markdown`, and the conflicting output-mode validation error.
+- On `2026-03-29`, completed-activity reads with a date window were rerouted to Todoist's completed-tasks-by-completion-date endpoint because Todoist's `/api/v1/activities` endpoint was returning HTTP 500 for those queries. The affected installed-CLI variants were reverified after reinstall, including `--object task --event completed` and plain `--event completed`.
+- On `2026-03-29`, important installed-CLI checks were reverified after the activity fallback change: `help`, `whoami --markdown`, `overview --compact`, `projects "CLI Test"`, `sections --project "CLI Test"`, `list --project "CLI Test" --markdown`, `doctor --markdown`, and the conflicting output-mode validation error.
 
 | ✅ | Verified On | Area | Command | Expected |
 | --- | --- | --- | --- | --- |
@@ -86,6 +88,13 @@ Notes:
 | ✅ | 2026-03-14 | comment | `todoist-cli comment "CLI Test" --project --markdown` | Markdown table prints for comment output |
 | ✅ | 2026-03-25 | activity | `todoist-cli activity --project "CLI Test" --limit 10` | Recent activity prints |
 | ✅ | 2026-03-25 | activity | `todoist-cli activity --object task --event added --limit 10` | Task-added activity prints |
+| ✅ | 2026-03-29 | activity | `todoist-cli activity --object task --event completed --since 2026-03-26 --until 2026-03-29 --limit 50 --compact` | Completed task activity prints via the completed-tasks fallback without HTTP 500 |
+| ✅ | 2026-03-29 | activity | `todoist-cli activity --event completed --since 2026-03-26 --until 2026-03-29 --limit 20 --compact` | Completed activity prints via the completed-tasks fallback without HTTP 500 |
+| ✅ | 2026-03-29 | activity | `todoist-cli activity --object task --event completed --since 2026-03-26 --until 2026-03-29 --limit 10 --markdown` | Markdown table prints for completed task activity via fallback |
+| ✅ | 2026-03-29 | activity | `todoist-cli activity --limit 10 --compact` | Unfiltered recent activity still prints through the standard activity endpoint |
+| ✅ | 2026-03-29 | activity | `todoist-cli activity --object task --event added --limit 10 --compact` | Task-added activity still prints through the standard activity endpoint |
+| ✅ | 2026-03-29 | activity | `todoist-cli activity --project "CLI Test" --limit 10 --compact` | Project-scoped activity returns cleanly when no matching rows are returned |
+| ✅ | 2026-03-29 | activity | `todoist-cli activity --project "CLI Test" --object task --event completed --since 2026-03-26 --until 2026-03-29 --limit 20 --compact` | Project-scoped completed activity returns cleanly via fallback when no matching rows are returned |
 | ✅ | 2026-03-25 | doctor | `todoist-cli doctor --markdown` | Reports config/token status, dependency versions, and API reachability in Markdown output |
 | ✅ | 2026-03-14 | delete | `todoist-cli delete "CLI Added Task"` | Disposable task is deleted |
 | ✅ | 2026-03-14 | delete | `todoist-cli delete "CLI Added Task 2" "CLI Added Task 3"` | Multiple disposable tasks are deleted |

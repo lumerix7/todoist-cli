@@ -3,18 +3,20 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { randomUUID } from "node:crypto";
 import { execFileSync } from "node:child_process";
-import { createCommand, TodoistApi } from "@doist/todoist-sdk";
 
 const DEFAULT_CONFIG_PATH = path.join(
   process.env.XDG_CONFIG_HOME || path.join(os.homedir(), ".config"),
   "todoist-cli",
   "config.json",
 );
+const TODOIST_API_BASE_URL = "https://api.todoist.com/api/v1/";
 const RETRYABLE_HTTP_STATUS_CODES = new Set([408, 429, 500, 502, 503, 504]);
 const IDEMPOTENT_RETRY_METHODS = new Set(["GET"]);
 const MAX_API_RETRY_ATTEMPTS = 3;
 const BASE_API_RETRY_DELAY_MS = 500;
+const API_REQUEST_TIMEOUT_MS = 15000;
 
 const HELP_TEXT = `todoist-cli
 
@@ -60,7 +62,7 @@ Advanced:
 Global options:
   --config <path>    Override config path
   --compact          Print a lightweight human-readable summary for common read commands
-  --markdown         Print Markdown tables for common read commands
+  --json             Print structured JSON output
 
 Common examples:
   todoist-cli doctor
@@ -227,7 +229,6 @@ Usage:
   todoist-cli doctor
 
 Notes:
-  - Compares installed Doist dependency versions with the latest npm versions
   - Checks whether config exists and whether a token is available
   - Calls Todoist only when a token is present
 `,
@@ -346,7 +347,7 @@ const HELP_GLOBAL_OPTIONS = `
 Global options:
   --config <path>       Override config path
   --compact             Print a lightweight human-readable summary when supported
-  --markdown            Print Markdown tables when supported
+  --json                Print structured JSON output
 `;
 
 for (const [key, text] of Object.entries(HELP_BY_COMMAND)) {
@@ -583,6 +584,83 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function processTaskContent(content, isUncompletable) {
+  if (typeof content !== "string") {
+    return content;
+  }
+  if (isUncompletable === false) {
+    return content.replace(/^\*\s*/, "");
+  }
+  if (content.startsWith("* ") || isUncompletable !== true) {
+    return content;
+  }
+  return `* ${content}`;
+}
+
+function snakeToCamelKey(key) {
+  return key.replace(/_([a-z])/g, (_, ch) => ch.toUpperCase());
+}
+
+function camelToSnakeKey(key) {
+  return key.replace(/[A-Z]/g, (ch) => `_${ch.toLowerCase()}`);
+}
+
+function camelizeDeep(value) {
+  if (Array.isArray(value)) {
+    return value.map(camelizeDeep);
+  }
+  if (value && typeof value === "object" && !(value instanceof Date)) {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, innerValue]) => [snakeToCamelKey(key), camelizeDeep(innerValue)]),
+    );
+  }
+  return value;
+}
+
+function snakeCaseDeep(value) {
+  if (Array.isArray(value)) {
+    return value.map(snakeCaseDeep);
+  }
+  if (value && typeof value === "object" && !(value instanceof Date)) {
+    return Object.fromEntries(
+      Object.entries(value)
+        .filter(([, innerValue]) => innerValue !== undefined)
+        .map(([key, innerValue]) => [camelToSnakeKey(key), snakeCaseDeep(innerValue)]),
+    );
+  }
+  return value;
+}
+
+function normalizeObjectTypeForApi(objectType) {
+  if (objectType === "task") {
+    return "item";
+  }
+  if (objectType === "comment") {
+    return "note";
+  }
+  return objectType;
+}
+
+function denormalizeObjectTypeFromApi(objectType) {
+  if (objectType === "item") {
+    return "task";
+  }
+  if (objectType === "note") {
+    return "comment";
+  }
+  return objectType;
+}
+
+function normalizeObjectEventTypeForApi(filter) {
+  const colonIndex = String(filter).indexOf(":");
+  if (colonIndex === -1) {
+    return normalizeObjectTypeForApi(filter);
+  }
+  const objectPart = filter.slice(0, colonIndex);
+  const eventPart = filter.slice(colonIndex);
+  return `${normalizeObjectTypeForApi(objectPart) ?? objectPart}${eventPart}`;
+}
+
 function parseRetryAfterMs(headers) {
   const retryAfterHeader =
     typeof headers?.get === "function"
@@ -620,34 +698,310 @@ function getRetryDelayMs(responseHeaders, attempt) {
   return BASE_API_RETRY_DELAY_MS * (2 ** (attempt - 1));
 }
 
-function toCustomFetchResponse(response) {
-  return {
-    ok: response.ok,
-    status: response.status,
-    statusText: response.statusText,
-    headers: Object.fromEntries(response.headers.entries()),
-    text: () => response.text(),
-    json: () => response.json(),
-  };
+function shouldRetryNetworkError(method, options, error) {
+  const hasRequestId = Boolean(options?.headers?.["X-Request-Id"] || options?.headers?.["x-request-id"]);
+  if (!(error instanceof Error)) {
+    return false;
+  }
+  if (error.name === "TimeoutError") {
+    return true;
+  }
+  return IDEMPOTENT_RETRY_METHODS.has(method) || hasRequestId;
+}
+
+async function fetchWithTimeout(url, fetchOptions) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => {
+    const timeoutError = new Error(`Request timed out after ${API_REQUEST_TIMEOUT_MS}ms`);
+    timeoutError.name = "TimeoutError";
+    controller.abort(timeoutError);
+  }, API_REQUEST_TIMEOUT_MS);
+  try {
+    return await fetch(url, { ...fetchOptions, signal: controller.signal });
+  } catch (error) {
+    if (controller.signal.aborted && controller.signal.reason instanceof Error) {
+      throw controller.signal.reason;
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeoutId);
+  }
 }
 
 async function todoistRetryingFetch(url, options = {}) {
   const { timeout: _timeout, ...fetchOptions } = options;
   const method = String(fetchOptions.method || "GET").toUpperCase();
   for (let attempt = 1; attempt <= MAX_API_RETRY_ATTEMPTS; attempt += 1) {
-    const response = await fetch(url, fetchOptions);
+    let response;
+    try {
+      response = await fetchWithTimeout(url, fetchOptions);
+    } catch (error) {
+      if (attempt === MAX_API_RETRY_ATTEMPTS || !shouldRetryNetworkError(method, fetchOptions, error)) {
+        throw error;
+      }
+      await sleep(BASE_API_RETRY_DELAY_MS * (2 ** (attempt - 1)));
+      continue;
+    }
     if (!shouldRetryHttpResponse(method, response.status) || attempt === MAX_API_RETRY_ATTEMPTS) {
-      return toCustomFetchResponse(response);
+      return response;
     }
     await sleep(getRetryDelayMs(response.headers, attempt));
   }
-  return toCustomFetchResponse(await fetch(url, fetchOptions));
+  return fetchWithTimeout(url, fetchOptions);
+}
+
+async function parseResponseBody(response) {
+  if (response.status === 204) {
+    return undefined;
+  }
+  const text = await response.text();
+  if (!text) {
+    return undefined;
+  }
+  try {
+    return camelizeDeep(JSON.parse(text));
+  } catch {
+    return text;
+  }
+}
+
+function createApiError(message, status, responseData) {
+  const error = new Error(message);
+  error.httpStatusCode = status;
+  error.responseData = responseData;
+  return error;
+}
+
+function appendQueryParams(url, params = {}) {
+  Object.entries(params).forEach(([key, value]) => {
+    if (value === undefined || value === null) {
+      return;
+    }
+    if (Array.isArray(value) || (value && typeof value === "object" && !(value instanceof Date))) {
+      url.searchParams.append(camelToSnakeKey(key), JSON.stringify(snakeCaseDeep(value)));
+      return;
+    }
+    url.searchParams.append(camelToSnakeKey(key), String(value));
+  });
+}
+
+async function todoistRequest(token, { method = "GET", path: relativePath, query, body, requestId }) {
+  const url = new URL(relativePath, TODOIST_API_BASE_URL);
+  appendQueryParams(url, query);
+  const headers = {
+    Authorization: `Bearer ${token}`,
+    Connection: "close",
+  };
+  const normalizedMethod = method.toUpperCase();
+  if (requestId) {
+    headers["X-Request-Id"] = requestId;
+  }
+  const requestOptions = {
+    method: normalizedMethod,
+    headers,
+  };
+  if (body !== undefined) {
+    headers["Content-Type"] = "application/json";
+    requestOptions.body = JSON.stringify(snakeCaseDeep(body));
+  }
+  const response = await todoistRetryingFetch(url.toString(), requestOptions);
+  const responseData = await parseResponseBody(response);
+  if (!response.ok) {
+    const detail =
+      typeof responseData === "object" && responseData !== null && typeof responseData.error === "string"
+        ? responseData.error
+        : null;
+    throw createApiError(
+      detail ? `HTTP ${response.status}: ${response.statusText}\n${detail}` : `HTTP ${response.status}: ${response.statusText}`,
+      response.status,
+      responseData,
+    );
+  }
+  return responseData;
+}
+
+function toPaginatedResults(data, limit) {
+  if (Array.isArray(data)) {
+    return {
+      results: typeof limit === "number" ? data.slice(0, limit) : data,
+      nextCursor: null,
+    };
+  }
+  return {
+    results: Array.isArray(data?.results) ? data.results : [],
+    nextCursor: data?.nextCursor || null,
+  };
 }
 
 function createTodoistClient(token) {
-  return new TodoistApi(token, {
-    customFetch: todoistRetryingFetch,
-  });
+  return {
+    async getUser() {
+      return todoistRequest(token, { path: "user" });
+    },
+    async getProjects(args = {}) {
+      const data = await todoistRequest(token, { path: "projects", query: args });
+      return toPaginatedResults(data, args.limit);
+    },
+    async searchProjects(args = {}) {
+      const data = await todoistRequest(token, { path: "projects/search", query: args });
+      return toPaginatedResults(data, args.limit);
+    },
+    async getSections(args = {}) {
+      const data = await todoistRequest(token, { path: "sections", query: args });
+      return toPaginatedResults(data, args.limit);
+    },
+    async getLabels(args = {}) {
+      const data = await todoistRequest(token, { path: "labels", query: args });
+      return toPaginatedResults(data, args.limit);
+    },
+    async getTasks(args = {}) {
+      const data = await todoistRequest(token, { path: "tasks", query: args });
+      return toPaginatedResults(data, args.limit);
+    },
+    async getTasksByFilter(args = {}) {
+      const data = await todoistRequest(token, { path: "tasks/filter", query: { query: args.query, limit: args.limit } });
+      return toPaginatedResults(data, args.limit);
+    },
+    async getTask(id) {
+      return todoistRequest(token, { path: `tasks/${id}` });
+    },
+    async addTask(args, requestId = randomUUID()) {
+      return todoistRequest(token, {
+        method: "POST",
+        path: "tasks",
+        body: {
+          ...args,
+          content: processTaskContent(args.content, args.isUncompletable),
+        },
+        requestId,
+      });
+    },
+    async quickAddTask(args) {
+      return todoistRequest(token, {
+        method: "POST",
+        path: "tasks/quick",
+        body: {
+          ...args,
+          text: processTaskContent(args.text, args.isUncompletable),
+        },
+      });
+    },
+    async updateTask(id, args, requestId = randomUUID()) {
+      const normalizedArgs = args.dueString === null ? { ...args, dueString: "no date" } : args;
+      const processedArgs = normalizedArgs.content && normalizedArgs.isUncompletable !== undefined
+        ? { ...normalizedArgs, content: processTaskContent(normalizedArgs.content, normalizedArgs.isUncompletable) }
+        : normalizedArgs;
+      const { order, ...rest } = processedArgs;
+      return todoistRequest(token, {
+        method: "POST",
+        path: `tasks/${id}`,
+        body: order !== undefined ? { ...rest, childOrder: order } : rest,
+        requestId,
+      });
+    },
+    async moveTask(id, args, requestId = randomUUID()) {
+      return todoistRequest(token, {
+        method: "POST",
+        path: `tasks/${id}/move`,
+        body: args,
+        requestId,
+      });
+    },
+    async closeTask(id, requestId = randomUUID()) {
+      await todoistRequest(token, {
+        method: "POST",
+        path: `tasks/${id}/close`,
+        requestId,
+      });
+      return true;
+    },
+    async reopenTask(id, requestId = randomUUID()) {
+      await todoistRequest(token, {
+        method: "POST",
+        path: `tasks/${id}/reopen`,
+        requestId,
+      });
+      return true;
+    },
+    async deleteTask(id, requestId = randomUUID()) {
+      await todoistRequest(token, {
+        method: "DELETE",
+        path: `tasks/${id}`,
+        requestId,
+      });
+      return true;
+    },
+    async getComments(args = {}) {
+      const data = await todoistRequest(token, { path: "comments", query: args });
+      return toPaginatedResults(data, args.limit);
+    },
+    async addComment(args, requestId = randomUUID()) {
+      return todoistRequest(token, {
+        method: "POST",
+        path: "comments",
+        body: args,
+        requestId,
+      });
+    },
+    async getCompletedTasksByCompletionDate(args) {
+      const data = await todoistRequest(token, {
+        path: "tasks/completed/by_completion_date",
+        query: args,
+      });
+      return {
+        items: Array.isArray(data?.items) ? data.items : [],
+        nextCursor: data?.nextCursor || null,
+      };
+    },
+    async getActivityLogs(args = {}) {
+      const normalizedArgs = {
+        ...args,
+        ...(args.objectEventTypes !== undefined
+          ? {
+              objectEventTypes: (Array.isArray(args.objectEventTypes) ? args.objectEventTypes : [args.objectEventTypes])
+                .map(normalizeObjectEventTypeForApi),
+            }
+          : {}),
+      };
+      const data = await todoistRequest(token, { path: "activities", query: normalizedArgs });
+      const results = Array.isArray(data?.results)
+        ? data.results.map((event) => ({
+            ...event,
+            objectType: denormalizeObjectTypeFromApi(event.objectType),
+          }))
+        : [];
+      return {
+        results,
+        nextCursor: data?.nextCursor || null,
+      };
+    },
+    async sync(syncRequest, requestId = randomUUID()) {
+      const data = await todoistRequest(token, {
+        method: "POST",
+        path: "sync",
+        body: {
+          ...syncRequest,
+          ...(Array.isArray(syncRequest.commands)
+            ? {
+                commands: syncRequest.commands.map((command) => ({
+                  ...command,
+                  args: snakeCaseDeep(command.args || {}),
+                })),
+              }
+            : {}),
+        },
+        requestId,
+      });
+      if (data?.syncStatus && typeof data.syncStatus === "object") {
+        for (const value of Object.values(data.syncStatus)) {
+          if (value !== "ok") {
+            throw createApiError(value.error || "Sync command failed", value.httpCode || 400, value.errorExtra || value);
+          }
+        }
+      }
+      return data;
+    },
+  };
 }
 
 function parseJsonArg(raw) {
@@ -1169,10 +1523,14 @@ function printCompact(result) {
 }
 
 function printResult(result, options) {
-  if (options?.markdown && printMarkdown(result)) {
+  if (options?.json) {
+    printStructured(result);
     return;
   }
   if (options?.compact && printCompact(result)) {
+    return;
+  }
+  if (printMarkdown(result)) {
     return;
   }
   printStructured(result);
@@ -1211,7 +1569,8 @@ async function runDoctor(options) {
   const { token, source, config } = resolveTokenInfo(configPath);
   const scriptDir = path.dirname(new URL(import.meta.url).pathname);
   const ownPkg = JSON.parse(fs.readFileSync(path.join(scriptDir, "..", "package.json"), "utf8"));
-  const dependencies = ["@doist/todoist-sdk"].map((packageName) => {
+  const trackedDependencies = Object.keys(ownPkg.dependencies || {}).filter((packageName) => packageName.startsWith("@doist/"));
+  const dependencies = trackedDependencies.map((packageName) => {
     const declared = ownPkg.dependencies?.[packageName];
     const installed = readInstalledPackageVersion(packageName);
     const latest = readLatestPackageVersion(packageName);
@@ -1270,12 +1629,25 @@ async function runDoctor(options) {
 async function completeTaskForever(client, taskId) {
   await client.sync({
     commands: [
-      createCommand("item_complete", {
-        id: taskId,
-        completedAt: new Date().toISOString(),
-      }),
+      {
+        type: "item_complete",
+        uuid: randomUUID(),
+        args: {
+          id: taskId,
+          dateCompleted: new Date().toISOString(),
+        },
+      },
     ],
   });
+  try {
+    await client.getTask(taskId);
+    await client.deleteTask(taskId);
+  } catch (error) {
+    const status = typeof error === "object" && error !== null ? error.httpStatusCode : undefined;
+    if (status !== 400 && status !== 404) {
+      throw error;
+    }
+  }
 }
 
 async function resolveProject(client, rawRef) {
@@ -1876,8 +2248,9 @@ async function main() {
     return;
   }
 
-  if (options.compact && options.markdown) {
-    exitWithError("Choose one output mode: --compact or --markdown.");
+  const selectedOutputModes = [options.compact, options.json].filter(Boolean).length;
+  if (selectedOutputModes > 1) {
+    exitWithError("Choose at most one output mode: default markdown, --compact, or --json.");
   }
 
   switch (command) {

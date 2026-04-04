@@ -14,23 +14,11 @@ display_path() {
   fi
 }
 
-resolve_default_targets() {
-  if command -v openclaw >/dev/null 2>&1 && command -v jq >/dev/null 2>&1; then
-    openclaw agents list --json 2>/dev/null \
-      | awk 'BEGIN {capture=0} /^\[$/ {capture=1} capture {print; if (/^\]$/) exit}' \
-      | jq -r '.[].workspace + "/skills"' \
-      | awk 'NF' \
-      | sort -u
-    return 0
-  fi
-  return 1
-}
-
 usage() {
   cat <<'USAGE'
-Usage: ./install-skill.sh [options] [target ...]
+Usage: ./install-skill.sh [options] <target> [target ...]
 
-Install the todoist-cli skill into one or more OpenClaw workspace skills directories.
+Install the todoist-cli skill into one or more explicit skills directories.
 
 Options:
   -y, --yes   Skip confirmation prompt
@@ -40,8 +28,7 @@ Arguments:
   target      A skills directory to install into, for example: ~/my-workspace/skills
 
 Notes:
-  - If no targets are passed, the script tries to discover OpenClaw workspace skill directories.
-  - Automatic discovery uses openclaw + jq when available.
+  - One or more explicit target directories are required.
   - todoist-cli must already be installed (run ./install.sh first).
 USAGE
 }
@@ -75,13 +62,8 @@ done
 
 TARGETS=("$@")
 if [[ ${#TARGETS[@]} -eq 0 ]]; then
-  mapfile -t TARGETS < <(resolve_default_targets || true)
-fi
-
-if [[ ${#TARGETS[@]} -eq 0 ]]; then
-  echo "No skill targets provided, and no default OpenClaw workspaces could be resolved." >&2
-  echo "Automatic discovery uses openclaw + jq when available." >&2
-  echo "Pass explicit targets, for example:" >&2
+  echo "No skill targets provided." >&2
+  echo "Pass one or more explicit targets, for example:" >&2
   echo "  ./install-skill.sh ~/some-workspace/skills" >&2
   exit 1
 fi

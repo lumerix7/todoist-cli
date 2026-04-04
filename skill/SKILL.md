@@ -24,26 +24,16 @@ todoist-cli <command> --help
 
 ```bash
 todoist-cli whoami
-todoist-cli whoami --markdown
-todoist-cli overview --markdown
+todoist-cli overview
 todoist-cli list --project inbox
-todoist-cli list --label cli-test
-todoist-cli list --today
 todoist-cli projects
-todoist-cli sections --project inbox
 todoist-cli find "search text"
 todoist-cli show "Task title"
 todoist-cli today
-todoist-cli comment "Task title"
-todoist-cli activity --project inbox
-todoist-cli doctor --markdown
+todoist-cli activity
+todoist-cli doctor
 todoist-cli add "Task title" "tomorrow 9am"
-todoist-cli quick "Task title #Inbox tomorrow 9am"
-todoist-cli modify "Task title" --priority p1
-todoist-cli move "Task title" --project inbox
 todoist-cli done "Task title"
-todoist-cli reopen id:123abc
-todoist-cli delete "Task title"
 ```
 
 ## Notes
@@ -52,5 +42,5 @@ todoist-cli delete "Task title"
 - Refs accept names, `id:...`, raw IDs, and Todoist URLs where applicable.
 - `list` is the explicit filter surface. Use `--project`, `--label`, `--today`, and `--overdue` there.
 - `find` is text-only local matching over active tasks.
-- `whoami`, `overview`, `list`, `show`, `comment`, `activity`, and `doctor` support `--markdown` and `--compact`.
+- Markdown is the default output when a formatter exists and is preferred for AI-agent use. Use `--json` only when structured parsing is needed, or `--compact` for terse text.
 - For state-changing actions, resolve the exact task/project first with `list`, `find`, `show`, `projects`, or `sections`.

@@ -22,16 +22,17 @@ Notes:
 - On `2026-03-14`, the checklist was verified both against `node ./bin/todoist-cli.js` and the globally installed `todoist-cli` binary.
 - On `2026-03-15`, important read-path checks were reverified against the globally installed `todoist-cli` binary after reinstall.
 - On `2026-03-16`, `@doist/todoist-ai` updated to `7.17.0`; `doctor` and core read commands reverified. `-v`/`--version` flags added and verified.
-- On `2026-03-16`, `@doist/todoist-ai` dependency removed entirely; `whoami`, `overview`, `projects`, `today`, `done`, `close` replaced with direct `@doist/todoist-api-typescript` calls. `tools` and `run` commands removed.
+- On `2026-03-16`, `@doist/todoist-ai` dependency removed entirely; `whoami`, `overview`, `projects`, `today`, `done`, `close` replaced with direct Todoist SDK calls. `tools` and `run` commands removed.
 - On `2026-03-16`, reinstalled globally after all refactors; `whoami`, `overview`, `projects`, `today`, `doctor` (all three output modes), version flags, error cases reverified against global binary.
-- On `2026-03-25`, `@doist/todoist-api-typescript` was updated to `7.4.0` and repo-level retry/backoff was added on top of the SDK's network retry: `429` is retried for all methods, and transient `GET` failures (`408`, `500`, `502`, `503`, `504`) are retried with exponential backoff.
+- On `2026-03-25`, the Doist SDK dependency was updated and repo-level retry/backoff was added on top of the SDK's network retry: `429` is retried for all methods, and transient `GET` failures (`408`, `500`, `502`, `503`, `504`) are retried with exponential backoff.
 - On `2026-03-25`, important read-path checks were reverified against `node ./bin/todoist-cli.js`: `help`, `whoami --markdown`, `overview --compact`, `projects "CLI Test"`, `sections --project "CLI Test"`, `list --project "CLI Test" --markdown`, `activity` reads, `doctor --markdown`, and the conflicting output-mode validation error.
 - On `2026-03-29`, completed-activity reads with a date window were rerouted to Todoist's completed-tasks-by-completion-date endpoint because Todoist's `/api/v1/activities` endpoint was returning HTTP 500 for those queries. The affected installed-CLI variants were reverified after reinstall, including `--object task --event completed` and plain `--event completed`.
 - On `2026-03-29`, important installed-CLI checks were reverified after the activity fallback change: `help`, `whoami --markdown`, `overview --compact`, `projects "CLI Test"`, `sections --project "CLI Test"`, `list --project "CLI Test" --markdown`, `doctor --markdown`, and the conflicting output-mode validation error.
+- On `2026-04-04`, the dependency was migrated from deprecated `@doist/todoist-api-typescript` to `@doist/todoist-sdk@8.2.1`, then reinstalled and reverified against both `node ./bin/todoist-cli.js` and the installed `todoist-cli` binary.
 
 | ✅ | Verified On | Area | Command | Expected |
 | --- | --- | --- | --- | --- |
-| ✅ | 2026-03-25 | help | `todoist-cli help` | Main help prints without error |
+| ✅ | 2026-04-04 | help | `todoist-cli help` | Main help prints without error |
 | ✅ | 2026-03-16 | version | `todoist-cli -v` | Prints version number (e.g. `0.1.0`) |
 | ✅ | 2026-03-16 | version | `todoist-cli --version` | Prints version number (e.g. `0.1.0`) |
 | ✅ | 2026-03-14 | help | `todoist-cli help add` | Add help includes structured flags |
@@ -44,18 +45,18 @@ Notes:
 | ✅ | 2026-03-14 | help | `todoist-cli help list` | Command help includes shared global options |
 | ✅ | 2026-03-14 | help | `todoist-cli help close` | Alias help prints without error and includes shared global options |
 | ✅ | 2026-03-16 | auth | `todoist-cli whoami` | Current account info prints |
-| ✅ | 2026-03-25 | auth | `todoist-cli whoami --markdown` | Markdown table prints for user info output |
+| ✅ | 2026-04-04 | auth | `todoist-cli whoami --markdown` | Markdown table prints for user info output |
 | ✅ | 2026-03-16 | auth | `todoist-cli whoami --compact` | Compact summary prints for user info output |
 | ✅ | 2026-03-16 | overview | `todoist-cli overview` | Overview prints structured output |
 | ✅ | 2026-03-16 | overview | `todoist-cli overview --markdown` | Markdown tables print for overview output |
-| ✅ | 2026-03-25 | overview | `todoist-cli overview --compact` | Compact summary prints for overview output |
+| ✅ | 2026-04-04 | overview | `todoist-cli overview --compact` | Compact summary prints for overview output |
 | ✅ | 2026-03-16 | projects | `todoist-cli projects` | Projects list prints |
 | ✅ | 2026-03-25 | projects | `todoist-cli projects "CLI Test"` | Project search returns the test project |
 | ✅ | 2026-03-14 | labels | `todoist-cli labels` | Labels list prints |
 | ✅ | 2026-03-25 | sections | `todoist-cli sections --project "CLI Test"` | `Backlog` section is listed |
 | ✅ | 2026-03-14 | list | `todoist-cli list --project "CLI Test"` | Test tasks are listed |
 | ✅ | 2026-03-14 | list | `todoist-cli list --project id:<project-id>` | Same result using explicit id ref |
-| ✅ | 2026-03-25 | list | `todoist-cli list --project "CLI Test" --markdown` | Markdown table prints for list output |
+| ✅ | 2026-04-04 | list | `todoist-cli list --project "CLI Test" --markdown` | Markdown table prints for list output |
 | ✅ | 2026-03-14 | show | `todoist-cli show "CLI Smoke Task"` | Task details print using task name ref |
 | ✅ | 2026-03-14 | show | `todoist-cli show id:<task-id>` | Task details print using `id:` ref |
 | ✅ | 2026-03-14 | show | `todoist-cli show <task-url>` | Task details print using Todoist URL |
@@ -89,13 +90,13 @@ Notes:
 | ✅ | 2026-03-25 | activity | `todoist-cli activity --project "CLI Test" --limit 10` | Recent activity prints |
 | ✅ | 2026-03-25 | activity | `todoist-cli activity --object task --event added --limit 10` | Task-added activity prints |
 | ✅ | 2026-03-29 | activity | `todoist-cli activity --object task --event completed --since 2026-03-26 --until 2026-03-29 --limit 50 --compact` | Completed task activity prints via the completed-tasks fallback without HTTP 500 |
-| ✅ | 2026-03-29 | activity | `todoist-cli activity --event completed --since 2026-03-26 --until 2026-03-29 --limit 20 --compact` | Completed activity prints via the completed-tasks fallback without HTTP 500 |
+| ✅ | 2026-04-04 | activity | `todoist-cli activity --event completed --since 2026-03-26 --until 2026-04-02 --limit 20 --compact` | Completed activity prints via the completed-tasks primary path without HTTP 500 |
 | ✅ | 2026-03-29 | activity | `todoist-cli activity --object task --event completed --since 2026-03-26 --until 2026-03-29 --limit 10 --markdown` | Markdown table prints for completed task activity via fallback |
 | ✅ | 2026-03-29 | activity | `todoist-cli activity --limit 10 --compact` | Unfiltered recent activity still prints through the standard activity endpoint |
 | ✅ | 2026-03-29 | activity | `todoist-cli activity --object task --event added --limit 10 --compact` | Task-added activity still prints through the standard activity endpoint |
 | ✅ | 2026-03-29 | activity | `todoist-cli activity --project "CLI Test" --limit 10 --compact` | Project-scoped activity returns cleanly when no matching rows are returned |
 | ✅ | 2026-03-29 | activity | `todoist-cli activity --project "CLI Test" --object task --event completed --since 2026-03-26 --until 2026-03-29 --limit 20 --compact` | Project-scoped completed activity returns cleanly via fallback when no matching rows are returned |
-| ✅ | 2026-03-25 | doctor | `todoist-cli doctor --markdown` | Reports config/token status, dependency versions, and API reachability in Markdown output |
+| ✅ | 2026-04-04 | doctor | `todoist-cli doctor --markdown` | Reports config/token status, dependency versions, and API reachability in Markdown output |
 | ✅ | 2026-03-14 | delete | `todoist-cli delete "CLI Added Task"` | Disposable task is deleted |
 | ✅ | 2026-03-14 | delete | `todoist-cli delete "CLI Added Task 2" "CLI Added Task 3"` | Multiple disposable tasks are deleted |
 | ✅ | 2026-03-16 | errors | `todoist-cli show "definitely missing task"` | Clean not-found error, no stack trace |

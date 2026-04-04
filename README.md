@@ -1,6 +1,6 @@
 # todoist-cli
 
-CLI-first Todoist wrapper built directly on [`@doist/todoist-api-typescript`](https://github.com/Doist/todoist-api-typescript).
+CLI-first Todoist wrapper built directly on [`@doist/todoist-sdk`](https://github.com/Doist/todoist-sdk-js).
 
 This repo is intentionally lighter than an MCP-first integration. It keeps a small AI-friendly command surface for common Todoist operations.
 

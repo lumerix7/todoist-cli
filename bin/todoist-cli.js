@@ -4,7 +4,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
-import { createCommand, TodoistApi } from "@doist/todoist-api-typescript";
+import { createCommand, TodoistApi } from "@doist/todoist-sdk";
 
 const DEFAULT_CONFIG_PATH = path.join(
   process.env.XDG_CONFIG_HOME || path.join(os.homedir(), ".config"),
@@ -1211,7 +1211,7 @@ async function runDoctor(options) {
   const { token, source, config } = resolveTokenInfo(configPath);
   const scriptDir = path.dirname(new URL(import.meta.url).pathname);
   const ownPkg = JSON.parse(fs.readFileSync(path.join(scriptDir, "..", "package.json"), "utf8"));
-  const dependencies = ["@doist/todoist-api-typescript"].map((packageName) => {
+  const dependencies = ["@doist/todoist-sdk"].map((packageName) => {
     const declared = ownPkg.dependencies?.[packageName];
     const installed = readInstalledPackageVersion(packageName);
     const latest = readLatestPackageVersion(packageName);

@@ -18,63 +18,25 @@ const MAX_API_RETRY_ATTEMPTS = 3;
 const BASE_API_RETRY_DELAY_MS = 500;
 const API_REQUEST_TIMEOUT_MS = 15000;
 
-const HELP_TEXT = `todoist-cli
-
-Light CLI wrapper around Todoist.
-
-Setup:
-  mkdir -p ~/.config/todoist-cli
-  cp config.example.json ~/.config/todoist-cli/config.json
-  edit ~/.config/todoist-cli/config.json
+const HELP_TEXT = `todoist-cli - CLI wrapper around Todoist.
 
 Usage:
   todoist-cli <command> [options]
   todoist-cli <command> -h|--help
 
-Read:
-  whoami
-  overview
-  list
-  find
-  show
-  comment
-  activity
-  today
-  completed-list
-  projects
-  sections
-  labels
-
-Write:
-  add
-  comment
-  quick
-  modify
-  move
-  done
-  close
-  reopen
-  delete
-
-Advanced:
+Commands:
+  whoami, overview, list, find, show, comment, activity, today, completed-list, projects, sections, labels
+  add, comment, quick, modify, move, done, close, reopen, delete
   doctor
 
 Global options:
-  --config <path>    Override config path
-  --compact          Print a lightweight human-readable summary for common read commands
   --json             Print structured JSON output
+  --compact          Print a lightweight summary for common read commands
+  --config <path>    Override config path
 
-Common examples:
-  todoist-cli doctor
-  todoist-cli list --project inbox
-  todoist-cli find "registry gateway"
-  todoist-cli quick "Pay rent tomorrow 9am #Inbox"
-  todoist-cli modify 123abc --priority p1 --due "tomorrow"
-  todoist-cli move 123abc --project inbox
-
-Details:
-  todoist-cli list --help
-  todoist-cli modify --help
+Examples:
+  todoist-cli today
+  todoist-cli add "Pay rent tomorrow 9am #Inbox"
 `;
 
 const HELP_BY_COMMAND = {
@@ -345,9 +307,8 @@ Usage:
 
 const HELP_GLOBAL_OPTIONS = `
 Global options:
-  --config <path>       Override config path
-  --compact             Print a lightweight human-readable summary when supported
   --json                Print structured JSON output
+  --compact             Print a lightweight summary when supported
 `;
 
 for (const [key, text] of Object.entries(HELP_BY_COMMAND)) {

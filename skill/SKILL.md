@@ -18,7 +18,6 @@ todoist-cli <command> --help
 - Start with `todoist-cli --help` for the command groups.
 - Then use `todoist-cli <command> --help` for exact flags and examples.
 - Prefer read commands first, then perform writes after identifying the exact task or project reference.
-- Install or refresh the host CLI with `./install.sh --yes` when the local package has changed.
 
 ## Common commands
 
@@ -38,9 +37,6 @@ todoist-cli done "Task title"
 
 ## Notes
 
-- Config defaults to `~/.config/todoist-cli/config.json`.
 - Refs accept names, `id:...`, raw IDs, and Todoist URLs where applicable.
-- `list` is the explicit filter surface. Use `--project`, `--label`, `--today`, and `--overdue` there.
-- `find` is text-only local matching over active tasks.
-- Markdown is the default output when a formatter exists and is preferred for AI-agent use. Use `--json` only when structured parsing is needed, or `--compact` for terse text.
-- For state-changing actions, resolve the exact task/project first with `list`, `find`, `show`, `projects`, or `sections`.
+- Markdown is the default output. Use `--json` when structured parsing is needed.
+- Config defaults to `~/.config/todoist-cli/config.json`.

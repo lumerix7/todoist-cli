@@ -25,7 +25,7 @@ Usage:
   todoist-cli <command> -h|--help
 
 Commands:
-  whoami, overview, list, find, show, comment, activity, today, completed-list, projects, sections, labels
+  whoami, overview, list, find, show, activity, today, completed-list, projects, sections, labels
   add, comment, quick, modify, move, done, close, reopen, delete
   doctor
 
@@ -40,17 +40,7 @@ Examples:
 `;
 
 const HELP_BY_COMMAND = {
-  list: `todoist-cli list
-
-List active tasks with explicit filters.
-
-Usage:
-  todoist-cli list
-  todoist-cli list --project inbox
-  todoist-cli list --label 0
-  todoist-cli list --today
-  todoist-cli list --overdue
-  todoist-cli list --project 0 --label 0 --today
+  list: `todoist-cli list [options] - list active tasks
 
 Options:
   --project <id|name>   Filter by project
@@ -58,122 +48,88 @@ Options:
   --today               Only today's tasks
   --overdue             Only overdue tasks
   --limit <n>           Limit results (default: 20)
-`,
-  find: `todoist-cli find
 
-Text-only local matching over active tasks.
+Examples:
+  todoist-cli list --project inbox
+  todoist-cli list --today
+  todoist-cli list --project 0 --label 0`,
 
-Usage:
+  find: `todoist-cli find <text> [options] - local text search over active tasks
+
+Options:
+  --limit <n>   Limit results (default: 20)
+
+Examples:
   todoist-cli find "registry"
-  todoist-cli find "gateway nginx"
+  todoist-cli find "gateway nginx"`,
 
-Notes:
-  - Searches task content, description, and project name
-  - Does not infer project filters; use 'list --project ...' for that
-  - Scans active tasks only
-  - Supports --limit <n> (default: 20)
-`,
-  add: `todoist-cli add
+  add: `todoist-cli add <title> [due] [options] - create a task
 
-Create one task with optional due text.
+Options:
+  --project <id|name>   Project
+  --section <id|name>   Section
+  --parent <task-ref>   Parent task
+  --description <text>  Description
+  --label <a,b>         Labels (comma-separated)
+  --priority <p1-p4>    Priority
 
-Usage:
-  todoist-cli add "Pay rent"
+Examples:
   todoist-cli add "Pay rent" "tomorrow 9am"
   todoist-cli add "Fix gateway" --project 0 --priority p1
-  todoist-cli add "Fix gateway" --project inbox --section backlog
-  todoist-cli add "Write tests" --parent "Release prep"
+  todoist-cli add "Write tests" --parent "Release prep"`,
 
-Options:
-  --project <id|name>   Project id or name
-  --section <id|name>   Section id or name
-  --parent <task-ref>   Parent task reference
-  --description <text>  Task description
-  --label <a,b>         Comma-separated labels
-  --priority <p1-p4>    Priority
-`,
-  quick: `todoist-cli quick
+  quick: `todoist-cli quick <text> - quick-add with natural language parsing
 
-Quick add using Todoist natural language parsing.
-
-Usage:
+Examples:
   todoist-cli quick "Pay rent tomorrow 9am #Inbox"
-  todoist-cli quick "Review PR @0 tomorrow"
-`,
-  modify: `todoist-cli modify
+  todoist-cli quick "Review PR @0 tomorrow"`,
 
-Update one task.
-
-Usage:
-  todoist-cli modify <task-ref> --content "New title"
-  todoist-cli modify <task-ref> --priority p1
-  todoist-cli modify <task-ref> --due "tomorrow"
-  todoist-cli modify <task-ref> --label foo,bar
-  todoist-cli modify <task-ref> --uncompletable
+  modify: `todoist-cli modify <task-ref> [options] - update a task
 
 Options:
-  --content <text>         Update content
-  --description <text>     Update description
-  --priority <p1-p4>       Update priority
-  --due <text>             Update due via natural language
-  --label <a,b>            Replace labels with comma-separated names
-  --uncompletable          Mark task as uncompletable
-  --completable            Mark task as completable
-`,
-  move: `todoist-cli move
+  --content <text>      New title
+  --description <text>  New description
+  --priority <p1-p4>    New priority
+  --due <text>          New due date (natural language)
+  --label <a,b>         Replace labels
+  --uncompletable       Mark as uncompletable
+  --completable         Mark as completable
 
-Move one task to a different project, section, or parent.
+Examples:
+  todoist-cli modify "Pay rent" --priority p1
+  todoist-cli modify "Pay rent" --due "tomorrow"`,
 
-Usage:
-  todoist-cli move <task-ref> --project inbox
-  todoist-cli move <task-ref> --section "Backlog"
-  todoist-cli move <task-ref> --project 0 --section "3.0"
-  todoist-cli move <task-ref> --parent <task-ref>
-  todoist-cli move <task-ref> --no-parent
-  todoist-cli move <task-ref> --project inbox --no-section
+  move: `todoist-cli move <task-ref> [options] - move a task
 
 Options:
-  --project <id|name>      Destination project id or name
-  --section <id|name>      Destination section id or name
-  --parent <task-ref>      Destination parent task reference
-  --no-parent              Move task to the project root
-  --no-section             Remove section placement
+  --project <id|name>   Destination project
+  --section <id|name>   Destination section
+  --parent <task-ref>   New parent task
+  --no-parent           Move to project root
+  --no-section          Remove section placement
 
-Notes:
-  - Use one move target: --project, --section, --parent, --no-parent, or --no-section
-  - You may combine --project with --section to narrow section lookup
-`,
-  show: `todoist-cli show
+Examples:
+  todoist-cli move "Pay rent" --project inbox
+  todoist-cli move "Pay rent" --project 0 --section "3.0"`,
 
-Show one task by reference.
+  show: `todoist-cli show <task-ref> - show one task
 
-Usage:
-  todoist-cli show <task-ref>
-`,
-  comment: `todoist-cli comment
+Examples:
+  todoist-cli show "Pay rent"
+  todoist-cli show id:<task-id>`,
 
-List comments on a task by default, or add one with --add.
-
-Usage:
-  todoist-cli comment <task-ref>
-  todoist-cli comment <task-ref> --add "Looks good"
-  todoist-cli comment <project-ref> --project
-  todoist-cli comment <project-ref> --project --add "Kickoff notes"
+  comment: `todoist-cli comment <ref> [options] - list or add comments
 
 Options:
-  --project             Treat the reference as a project
-  --add <text>          Add a comment instead of listing comments
-  --limit <n>           Limit listed comments (default: 20)
-`,
-  activity: `todoist-cli activity
+  --project         Treat ref as a project
+  --add <text>      Add a comment
+  --limit <n>       Limit listed comments (default: 20)
 
-List recent Todoist activity with a small filter surface.
+Examples:
+  todoist-cli comment "Pay rent"
+  todoist-cli comment "Pay rent" --add "Looks good"`,
 
-Usage:
-  todoist-cli activity
-  todoist-cli activity --project inbox
-  todoist-cli activity --object task --event completed
-  todoist-cli activity --since 2026-03-01 --until 2026-03-14
+  activity: `todoist-cli activity [options] - list recent activity
 
 Options:
   --project <id|name>   Filter by project
@@ -182,137 +138,103 @@ Options:
   --since <date>        Start date (YYYY-MM-DD)
   --until <date>        End date (YYYY-MM-DD)
   --limit <n>           Limit results (default: 20)
-`,
-  doctor: `todoist-cli doctor
 
-Check local setup, config, token source, dependency versions, and API reachability.
+Examples:
+  todoist-cli activity --event completed --since 2026-03-01 --until 2026-03-14
+  todoist-cli activity --object task --event added --limit 10`,
 
-Usage:
-  todoist-cli doctor
+  doctor: `todoist-cli doctor - check config, token, and API reachability`,
 
-Notes:
-  - Checks whether config exists and whether a token is available
-  - Calls Todoist only when a token is present
-`,
-  done: `todoist-cli done
-
-Complete one or more tasks.
-
-Usage:
-  todoist-cli done <task-ref>
-  todoist-cli done <task-ref> <task-ref>
-  todoist-cli done <task-ref> --forever
+  done: `todoist-cli done <task-ref...> [options] - complete tasks
 
 Options:
-  --forever             Permanently complete a recurring task
+  --forever   Permanently complete a recurring task
 
-Notes:
-  - On non-recurring tasks, --forever falls back to normal completion
-`,
-  close: `Alias of: todoist-cli done`,
-  reopen: `todoist-cli reopen
+Examples:
+  todoist-cli done "Pay rent"
+  todoist-cli done "Task A" "Task B"`,
 
-Reopen one or more completed tasks.
+  close: `todoist-cli close - alias of: todoist-cli done`,
 
-Usage:
-  todoist-cli reopen <task-ref>
-  todoist-cli reopen <task-ref> <task-ref>
-`,
-  delete: `todoist-cli delete
+  reopen: `todoist-cli reopen <task-ref...> - reopen completed tasks
 
-Delete one or more tasks.
+Examples:
+  todoist-cli reopen "Pay rent"`,
 
-Usage:
-  todoist-cli delete <task-ref>
-  todoist-cli delete <task-ref> <task-ref>
-`,
-  projects: `todoist-cli projects
+  delete: `todoist-cli delete <task-ref...> - delete tasks
 
-List projects or search by text.
+Examples:
+  todoist-cli delete "Pay rent"
+  todoist-cli delete "Task A" "Task B"`,
 
-Usage:
+  projects: `todoist-cli projects [query] [options] - list or search projects
+
+Options:
+  --limit <n>   Limit results (default: 20)
+
+Examples:
   todoist-cli projects
-  todoist-cli projects inbox
-  todoist-cli projects work
+  todoist-cli projects inbox`,
+
+  labels: `todoist-cli labels [options] - list labels
 
 Options:
-  --limit <n>           Limit results (default: 20)
-`,
-  labels: `todoist-cli labels
+  --limit <n>   Limit results (default: 100)`,
 
-List labels.
-
-Usage:
-  todoist-cli labels
-
-Options:
-  --limit <n>           Limit results (default: 100)
-`,
-  sections: `todoist-cli sections
-
-List sections, optionally filtered by project.
-
-Usage:
-  todoist-cli sections
-  todoist-cli sections --project inbox
-  todoist-cli sections --project 0
+  sections: `todoist-cli sections [options] - list sections
 
 Options:
   --project <id|name>   Filter by project
   --limit <n>           Limit results (default: 100)
-`,
-  today: `todoist-cli today
 
-List today's tasks.
+Examples:
+  todoist-cli sections --project inbox`,
 
-Usage:
+  today: `todoist-cli today [options] - list today's tasks
+
+Options:
+  --days <n>        Number of days (default: 1)
+  --start <date>    Start date (default: today)
+  --overdue <mode>  include-overdue | overdue-only | exclude-overdue
+  --limit <n>       Limit results (default: 50)
+
+Examples:
   todoist-cli today
-  todoist-cli today --days 3
-  todoist-cli today --overdue overdue-only
+  todoist-cli today --days 3 --overdue overdue-only`,
+
+  "completed-list": `todoist-cli completed-list [options] - list recently completed tasks
 
 Options:
-  --days <n>              Number of days (default: 1)
-  --start <date>          Start date text (default: today)
-  --overdue <mode>        include-overdue | overdue-only | exclude-overdue
-  --limit <n>             Limit results (default: 50)
-`,
-  "completed-list": `todoist-cli completed-list
+  --days <n>    Look back this many days (default: 7)
+  --limit <n>   Limit results (default: 50)
 
-List recently completed tasks.
-
-Usage:
-  todoist-cli completed-list
+Examples:
   todoist-cli completed-list --days 7
-  todoist-cli completed-list --days 30 --limit 100
+  todoist-cli completed-list --days 30 --limit 100`,
 
-Options:
-  --days <n>            Look back this many days (default: 7)
-  --limit <n>           Limit results (default: 50)
-`,
-  whoami: `todoist-cli whoami
+  whoami: `todoist-cli whoami - show account identity and plan`,
 
-Show the current Todoist account identity and plan.
-
-Usage:
-  todoist-cli whoami
-`,
-  overview: `todoist-cli overview
-
-Show account overview (projects, sections, inbox).
-
-Usage:
-  todoist-cli overview
-`,
+  overview: `todoist-cli overview - show account overview (projects, sections, inbox)`,
 };
 
-const HELP_GLOBAL_OPTIONS = `
-Global options:
-  --json                Print structured JSON output
-  --compact             Print a lightweight summary when supported
-`;
+const HELP_SHARED_OPTIONS = `  --json                Output as JSON
+  --compact             Lightweight summary
+  -h, --help            Show this help`;
 
 for (const [key, text] of Object.entries(HELP_BY_COMMAND)) {
-  HELP_BY_COMMAND[key] = `${text.trimEnd()}\n${HELP_GLOBAL_OPTIONS}`;
+  const hasOptions = text.includes('\nOptions:\n');
+  const hasExamples = text.includes('\nExamples:\n');
+  let updated = text;
+  if (hasOptions && hasExamples) {
+    updated = updated.replace('\n\nExamples:', `\n${HELP_SHARED_OPTIONS}\n\nExamples:`);
+  } else if (hasOptions) {
+    updated = updated.trimEnd() + '\n' + HELP_SHARED_OPTIONS;
+  } else if (hasExamples) {
+    updated = updated.replace('\n\nExamples:', `\n\nOptions:\n${HELP_SHARED_OPTIONS}\n\nExamples:`);
+  } else {
+    updated = updated.trimEnd() + `\n\nOptions:\n${HELP_SHARED_OPTIONS}`;
+  }
+  HELP_BY_COMMAND[key] = updated;
 }
 
 function mapPremiumStatus(status) {
